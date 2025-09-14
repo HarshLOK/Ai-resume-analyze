@@ -362,7 +362,7 @@ export const usePuterStore = create<PuterStore>((set, get) => {
                     ],
                 },
             ],
-            { model: "claude-sonnet-4" }
+            { model: "claude-3-7-sonnet" }
         ) as Promise<AIResponse | undefined>;
     };
 
@@ -414,6 +414,37 @@ export const usePuterStore = create<PuterStore>((set, get) => {
         return puter.kv.list(pattern, returnValues);
     };
 
+    // Convenience helpers for JSON values in KV
+    const getKVJson = async <T = any>(key: string): Promise<T | undefined> => {
+        const val = await getKV(key);
+        if (typeof val !== "string") return val as any;
+        try {
+            return JSON.parse(val) as T;
+        } catch {
+            return undefined;
+        }
+    };
+
+    const setKVJson = async (key: string, value: any) => {
+        try {
+            return setKV(key, JSON.stringify(value));
+        } catch (e) {
+            setError(`KV JSON stringify failed: ${e}`);
+        }
+    };
+
+    const listKVJson = async <T = any>(pattern: string) => {
+        const items = (await listKV(pattern, true)) as any[] | undefined;
+        if (!items) return items;
+        return items.map((it) => {
+            let parsed: T | undefined = undefined;
+            if (typeof it.value === "string") {
+                try { parsed = JSON.parse(it.value); } catch {}
+            }
+            return { ...it, value: parsed };
+        });
+    };
+
     const flushKV = async () => {
         const puter = getPuter();
         if (!puter) {
@@ -460,6 +491,10 @@ export const usePuterStore = create<PuterStore>((set, get) => {
             delete: (key: string) => deleteKV(key),
             list: (pattern: string, returnValues?: boolean) =>
                 listKV(pattern, returnValues),
+            // JSON convenience wrappers
+            getJSON: <T = any>(key: string) => getKVJson<T>(key),
+            setJSON: (key: string, value: any) => setKVJson(key, value),
+            listJSON: <T = any>(pattern: string) => listKVJson<T>(pattern),
             flush: () => flushKV(),
         },
         init,
